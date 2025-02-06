@@ -1,12 +1,21 @@
 const axios = require('axios');
-const { connectDB } = require('./dbConnection'); // Assuming you have a dbConnection.js for connecting to MongoDB
+const { MongoClient } = require('mongodb');
 
-// Fetch and store game data from CheapShark API
 const fetchAndStoreGame = async () => {
     const API_URL = process.env.CHEAPSHARK_API;
-    const collection = await connectDB();
+    const MONGO_URI = process.env.MONGO_URI; // MongoDB connection string
+    const DB_NAME = process.env.DB_NAME; // Database name
+    const COLLECTION_NAME = 'games'; // Collection name
+
+    let client;
 
     try {
+        // Connect to MongoDB
+        client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+        await client.connect();
+        const db = client.db(DB_NAME);
+        const collection = db.collection(COLLECTION_NAME);
+
         // Fetch game data
         const response = await axios.get(API_URL);
         const gameData = response.data;
@@ -46,18 +55,11 @@ const fetchAndStoreGame = async () => {
     } catch (error) {
         console.error("Error fetching and storing game data:", error);
         return { error: "Failed to fetch/store game data" };
+    } finally {
+        if (client) {
+            await client.close();
+        }
     }
 };
 
-// API Route to manually trigger data fetching
-const setupFetchStoreRoute = (app) => {
-    app.post('/fetch-store', async (req, res) => {
-        const result = await fetchAndStoreGame();
-        res.json(result);
-    });
-};
-
-module.exports = {
-    fetchAndStoreGame,
-    setupFetchStoreRoute
-};
+module.exports = fetchAndStoreGame;
