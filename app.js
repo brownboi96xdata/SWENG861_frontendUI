@@ -4,37 +4,46 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const https = require('https');
 const routes = require('./routes');
-const db = require('./db');
-const logger = require('./logger');
+const axios = require('axios');
+const { MongoClient, ObjectId } = require('mongodb');
+require('dotenv').config();
 
-// Initialize the Express app
 const app = express();
+const DATABASE_NAME = "gameDB";
+const COLLECTION_NAME = "games";
+const PORT = process.env.PORT;
+//const cors = require('cors');
 
-// Middleware setup
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Safety measures
+app.use(express.json());  
+app.use(cors());
 
-// Connect to the database
-db.connect()
-  .then(() => {
-    console.log('Database connected successfully');
-  })
-  .catch(err => {
-    console.error('Database connection error:', err);
-  });
-
-// Set up routes
-app.use('/api', routes);
-
-// SSL certificates
-const sslOptions = {
-  key: fs.readFileSync('/path/to/your/private.key'),
-  cert: fs.readFileSync('/path/to/your/certificate.crt')
+// Connecting to MongoDB database
+const connectDB = async () => {
+    const client = new MongoClient(process.env.MONGODB_URI);
+    await client.connect();
+    return client.db(DATABASE_NAME).collection(COLLECTION_NAME);
 };
 
-// Start the HTTPS server
-const PORT = process.env.PORT || 3000;
-https.createServer(sslOptions, app).listen(PORT, () => {
-  logger.info(`HTTPS Server is running on port ${PORT}`);
-  console.log(`HTTPS Server is running on port ${PORT}`);
-});
+// Load SSL/TLS certificates
+const SSL_KEY_PATH = 'ssl/server.key';
+const SSL_CERT_PATH = 'ssl/server.cert';
+
+if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
+    // Start HTTPS Server
+    const httpsOptions = {
+        key: fs.readFileSync(SSL_KEY_PATH),
+        cert: fs.readFileSync(SSL_CERT_PATH),
+    };
+
+    https.createServer(httpsOptions, app).listen(PORT, () => {
+        console.log(`HTTPS Server running on https://localhost:${PORT}`);
+    });
+} else {
+    console.warn("SSL certificates not found! Running server on HTTP.");
+    
+    // Start HTTP Server as a fallback
+    http.createServer(app).listen(PORT, () => {
+        console.log(`HTTP Server running on http://localhost:${PORT}`);
+    });
+};

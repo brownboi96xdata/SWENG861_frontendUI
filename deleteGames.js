@@ -1,8 +1,19 @@
 const express = require('express');
-const { connectDB } = require('./dbConnection'); // Assuming you have a dbConnection.js for connecting to MongoDB
-const { ObjectId } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 
 const router = express.Router();
+
+// MongoDB connection details
+const MONGO_URI = process.env.MONGO_URI;
+const DB_NAME = process.env.DB_NAME;
+const COLLECTION_NAME = 'games';
+
+// Function to connect to MongoDB
+const connectDB = async () => {
+    const client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect();
+    return client.db(DB_NAME).collection(COLLECTION_NAME);
+};
 
 // Deleting all games
 router.delete('/games', async (req, res) => {

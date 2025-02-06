@@ -1,9 +1,20 @@
 const express = require('express');
-const { connectDB } = require('./dbConnection'); // Assuming you have a dbConnection.js for connecting to MongoDB
+const { MongoClient, ObjectId } = require('mongodb');
 const { validateGameAttributes, validateDeals } = require('./validation');
-const { ObjectId } = require('mongodb');
 
 const router = express.Router();
+
+// MongoDB connection details
+const MONGO_URI = process.env.MONGO_URI;
+const DB_NAME = process.env.DB_NAME;
+const COLLECTION_NAME = 'games';
+
+// Function to connect to MongoDB
+const connectDB = async () => {
+    const client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect();
+    return client.db(DB_NAME).collection(COLLECTION_NAME);
+};
 
 // Fetch existing game from the database
 const fetchExistingGame = async (collection, gameId) => {
@@ -35,8 +46,8 @@ const updateGame = async (collection, gameId, newGameData) => {
 
 // Update an existing game by ID
 router.put('/games/:id', async (req, res) => {
-    const collection = await connectDB();
     try {
+        const collection = await connectDB();
         const { gameID, title, thumb, cheapestPrice, deals } = req.body;
 
         validateGameAttributes(req.body);
