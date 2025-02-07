@@ -1,49 +1,32 @@
-// Import necessary modules
 const express = require('express');
-const bodyParser = require('body-parser');
+const connectDB = require('./config/db');
+const gameRoutes = require('./routes/gameRoutes');
 const fs = require('fs');
 const https = require('https');
-const routes = require('./routes');
-const axios = require('axios');
-const { MongoClient, ObjectId } = require('mongodb');
-require('dotenv').config();
+require('dotenv').config(); // Load environment variables
 
 const app = express();
-const DATABASE_NAME = "gameDB";
-const COLLECTION_NAME = "games";
-const PORT = process.env.PORT;
-//const cors = require('cors');
+app.use(express.json());
 
-// Safety measures
-app.use(express.json());  
-app.use(cors());
+connectDB();
 
-// Connecting to MongoDB database
-const connectDB = async () => {
-    const client = new MongoClient(process.env.MONGODB_URI);
-    await client.connect();
-    return client.db(DATABASE_NAME).collection(COLLECTION_NAME);
-};
+// Routes
+app.use('/api', gameRoutes);
 
-// Load SSL/TLS certificates
-const SSL_KEY_PATH = 'ssl/server.key';
-const SSL_CERT_PATH = 'ssl/server.cert';
+const PORT = process.env.PORT || 5000;
 
-if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
-    // Start HTTPS Server
-    const httpsOptions = {
-        key: fs.readFileSync(SSL_KEY_PATH),
-        cert: fs.readFileSync(SSL_CERT_PATH),
-    };
+// Load SSL Certificates if they exist
+if (process.env.SSL_KEY_PATH && process.env.SSL_CERT_PATH) {
+  const sslOptions = {
+    key: fs.readFileSync(process.env.SSL_KEY_PATH),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH),
+  };
 
-    https.createServer(httpsOptions, app).listen(PORT, () => {
-        console.log(`HTTPS Server running on https://localhost:${PORT}`);
-    });
+  https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`Secure server running on port ${PORT}`);
+  });
 } else {
-    console.warn("SSL certificates not found! Running server on HTTP.");
-    
-    // Start HTTP Server as a fallback
-    http.createServer(app).listen(PORT, () => {
-        console.log(`HTTP Server running on http://localhost:${PORT}`);
-    });
-};
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
