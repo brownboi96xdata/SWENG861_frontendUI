@@ -1,12 +1,16 @@
 const express = require('express');
 const connectDB = require('./config/db');
 const gameRoutes = require('./routes/gameRoutes');
+const { corsMiddleware, errorHandler } = require('./middleware/middleware.js');
 const fs = require('fs');
 const https = require('https');
 require('dotenv').config(); // Load environment variables
 
 const app = express();
 app.use(express.json());
+app.use(corsMiddleware);
+app.use(errorHandler);
+
 
 connectDB();
 
