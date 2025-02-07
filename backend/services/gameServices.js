@@ -1,6 +1,11 @@
 const axios = require('axios');
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 
+/**
+ * Fetches game data from the CheapShark API using the provided game ID.
+ * @param {string} gameId - The ID of the game to fetch.
+ * @returns {Promise<Object|null>} - The game data or null if an error occurs.
+ */
 const fetchGameFromAPI = async (gameId) => {
   try {
     const apiUrl = `${process.env.CHEAPSHARK_API}&id=${gameId}`; // Use env variable
@@ -12,4 +17,6 @@ const fetchGameFromAPI = async (gameId) => {
   }
 };
 
-module.exports = { fetchGameFromAPI };
+module.exports = {
+  fetchGameFromAPI
+};
