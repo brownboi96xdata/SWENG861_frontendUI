@@ -270,7 +270,15 @@ const deleteAllGames = async (req, res) => {
     try {
         const collection = await connectDB();
         const result = await collection.deleteMany({});
+        
+        if (result.deletedCount === 0) {
+            res.status(404).json({ message: 'No games found to delete' });
+            console.log('No games found to delete.');
+            return;
+        }
+
         res.status(200).json({ message: `${result.deletedCount} games deleted successfully` });
+        console.log('All games deleted.');
     } catch (error) {
         console.error('Error deleting all games:', error);
         res.status(500).json({ error: 'Internal server error' });
