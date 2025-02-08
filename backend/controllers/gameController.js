@@ -90,7 +90,8 @@ const isAttributeInvalid = (game, attr) => {
     }
 };
 
-// Fetch and store game data from CheapShark API
+// CRUD Operations
+// Fetch and store game data from CheapShark API (POST)
 const fetchAndStoreGame = async (req, res) => {
     const API_URL = process.env.CHEAPSHARK_API;
     const collection = await connectDB();
@@ -116,15 +117,21 @@ const fetchAndStoreGame = async (req, res) => {
                 .map(deal => ({
                     storeID: deal.storeID,
                     price: deal.price
-            }))
+                }))
         };
 
-        // Check if the game already exists
-        const existingGame = await collection.findOne({ gameID: formattedGame.gameID });
+        // Check if the game already exists by non-null gameID or title
+        const existingGame = await collection.findOne({
+            $or: [
+                { gameID: { $ne: null, $eq: formattedGame.gameID } },
+                { title: formattedGame.title }
+            ]
+        });
 
         if (existingGame) {
-            console.log("Game already exists in database.");
-            return res.status(200).json({ message: "Game already exists" });
+            console.log("Game already exists in the database. Skipping insertion.");
+            console.log("GameID:", existingGame.gameID);
+            return res.status(409).json({ message: "Game already exists in the database." });
         }
 
         // Insert into MongoDB
@@ -138,8 +145,14 @@ const fetchAndStoreGame = async (req, res) => {
     }
 };
 
+// Other CRUD operations...
 
-// CRUD Operations
+module.exports = {
+    fetchAndStoreGame,
+    // Other exports...
+};
+
+//------Adding a Game (POST)-----------------------------------------
 const addGame = async (req, res) => {
     const collection = await connectDB();
     try {
@@ -155,7 +168,7 @@ const addGame = async (req, res) => {
         const existingGame = await collection.findOne({
             $or: [
                 { gameID: { $ne: null, $eq: gameID } },
-                { title }
+                { title: { $eq: title } }
             ]
         });
         
@@ -181,6 +194,7 @@ const addGame = async (req, res) => {
     }
 };
 
+//---------------Update a Game (PUT)-----------------------------------
 const updateGame = async (req, res) => {
     const collection = await connectDB();
     try {
@@ -239,6 +253,7 @@ const updateGameInDB = async (collection, gameId, newGameData) => {
     );
 };
 
+//------------- Getting All Games (GET)-------------------------------------
 const getAllGames = async (req, res) => {
     const collection = await connectDB();
     try {
@@ -251,6 +266,7 @@ const getAllGames = async (req, res) => {
     }
 };
 
+//-------------Getting Game By ID (GET)------------------------------------------
 const getGameById = async (req, res) => {
     const collection = await connectDB();
     try {
@@ -266,6 +282,7 @@ const getGameById = async (req, res) => {
     }
 };
 
+//---------------Deleting All Games (DELETE)---------------------------------
 const deleteAllGames = async (req, res) => {
     try {
         const collection = await connectDB();
@@ -285,6 +302,7 @@ const deleteAllGames = async (req, res) => {
     }
 };
 
+//---------------Deleting a Game By ID (DELETE)------------------------------------
 const deleteGameById = async (req, res) => {
     const { id } = req.params;
 
