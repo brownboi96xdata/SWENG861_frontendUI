@@ -21,6 +21,16 @@ const isNumerical = (value) => {
     return !isNaN(parseFloat(value)) && isFinite(value);
 };
 
+const isValidUrl = (url) => {
+    const urlPattern = new RegExp('^(https?:\\/\\/)?'+ // protocol
+        '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.?)+[a-z]{2,}|'+ // domain name
+        '((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address
+        '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // port and path
+        '(\\?[;&a-z\\d%_.~+=-]*)?'+ // query string
+        '(\\#[-a-z\\d_]*)?$','i'); // fragment locator
+    return !!urlPattern.test(url);
+};
+
 const hasUniqueStoreIDs = (deals) => {
     const storeIDSet = new Set();
     for (const deal of deals) {
@@ -145,74 +155,65 @@ const fetchAndStoreGame = async (req, res) => {
     }
 };
 
-// Other CRUD operations...
-
-module.exports = {
-    fetchAndStoreGame,
-    // Other exports...
-};
-
-//------Adding a Game (POST)-----------------------------------------
+//---------------Create a Game (POST)-----------------------------------
 const addGame = async (req, res) => {
     const collection = await connectDB();
     try {
-        const { gameID, title, thumb, cheapestPrice, deals } = req.body;
+        const { title, thumb, cheapestPrice, deals } = req.body;
 
-        // Validate game attributes
-        validateGameAttributes(req.body);
+        // Validate game data
+        validateGameData({ title, thumb, cheapestPrice, deals });
 
-        // Validate and transform the incoming data
-        validateDeals(deals);
-
-        // Check for existing game with the same gameID or title
-        const existingGame = await collection.findOne({
-            $or: [
-                { gameID: { $ne: null, $eq: gameID } },
-                { title: { $eq: title } }
-            ]
-        });
-        
+        // Check if the game already exists by title
+        const existingGame = await collection.findOne({ title });
         if (existingGame) {
-            throw new Error("A game with the same gameID or title already exists.");
+            return res.status(409).json({ message: "Game already exists in the database." });
         }
 
-        const newGame = {
-            gameID,
-            title,
-            thumb,
-            cheapestPrice,
-            deals
-        };
-
+        // Insert new game into the database
+        const newGame = { title, thumb, cheapestPrice, deals };
         const result = await collection.insertOne(newGame);
-        const successMessage = `Game added with ID: ${result.insertedId}`;
-        console.log(successMessage);
-        res.status(201).json({ message: successMessage });
+
+        console.log("Game successfully added:", result.insertedId);
+        res.status(201).json({ message: "Game added successfully!", id: result.insertedId });
     } catch (error) {
-        console.error(`Error: ${error.message}`);
-        res.status(400).json({ error: error.message });
+        console.error("Error adding game:", error);
+        res.status(500).json({ error: "Failed to add game" });
     }
 };
 
+// Other CRUD operations...
+
 //---------------Update a Game (PUT)-----------------------------------
+const validateGameData = ({ title, thumb, cheapestPrice, deals }) => {
+    validateTitle(title);
+    if (cheapestPrice) {
+        validateCheapestPrice(cheapestPrice);
+    }
+    if (deals) {
+        validateDeals(deals);
+    }
+};
+
+const validateTitle = (title) => {
+    if (title && (title.trim() === '')) {
+        throw new Error("Game title cannot be blank.");
+    }
+};
+
 const updateGame = async (req, res) => {
     const collection = await connectDB();
     try {
-        const { gameID, title, thumb, cheapestPrice, deals } = req.body;
-
-        validateGameAttributes(req.body);
-        validateDeals(deals);
-
         const gameId = new ObjectId(req.params.id);
         const existingGame = await fetchExistingGame(collection, gameId);
+        const update = createUpdateObject(req.body);
+        validateGameData(update);
 
-        const isSameGame = checkIfSameGame(existingGame, { gameID, title, thumb, cheapestPrice, deals });
-
-        if (isSameGame) {
+        if (Object.keys(update).length === 0) {
             throw new Error("No changes detected. Provide at least one unique update.");
         }
 
-        const result = await updateGameInDB(collection, gameId, { gameID, title, thumb, cheapestPrice, deals });
+        const result = await updateGameInDB(collection, gameId, update);
 
         if (result.modifiedCount === 0) {
             throw new Error("Game not found or no changes made.");
@@ -221,11 +222,19 @@ const updateGame = async (req, res) => {
         const successMessage = `Game updated with ID: ${req.params.id}`;
         console.log(successMessage);
         res.json({ message: successMessage });
-
     } catch (error) {
         console.error(`Error: ${error.message}`);
         res.status(400).json({ error: error.message });
     }
+};
+
+const createUpdateObject = (body) => {
+    const update = {};
+    if (body.title) update.title = body.title;
+    if (body.thumb) update.thumb = body.thumb;
+    if (body.cheapestPrice) update.cheapestPrice = body.cheapestPrice;
+    if (body.deals) update.deals = body.deals;
+    return update;
 };
 
 const fetchExistingGame = async (collection, gameId) => {
@@ -236,7 +245,7 @@ const fetchExistingGame = async (collection, gameId) => {
     return existingGame;
 };
 
-const checkIfSameGame = (existingGame, newGameData) => {
+const isSameGame = (existingGame, newGameData) => {
     return (
         existingGame.gameID === newGameData.gameID &&
         existingGame.title === newGameData.title &&
