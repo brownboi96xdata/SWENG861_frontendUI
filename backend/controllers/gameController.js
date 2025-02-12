@@ -13,13 +13,6 @@ const connectDB = async () => {
 };
 
 // Validate deals array
-const isDealValid = (deal) => {
-    return deal.storeID !== null && deal.storeID !== "" && deal.price !== null && deal.price !== "";
-};
-
-const isNumerical = (value) => {
-    return !isNaN(parseFloat(value)) && isFinite(value);
-};
 
 const isValidUrl = (url) => {
     const urlPattern = new RegExp('^(https?:\\/\\/)?'+ // protocol
@@ -31,72 +24,70 @@ const isValidUrl = (url) => {
     return !!urlPattern.test(url);
 };
 
-const hasUniqueStoreIDs = (deals) => {
-    const storeIDSet = new Set();
-    for (const deal of deals) {
-        if (storeIDSet.has(deal.storeID)) {
-            return false;
-        }
-        storeIDSet.add(deal.storeID);
+const validateDeals = (deals) => {
+    if (!deals) {
+        throw new Error("Deals are required for adding a game.");
     }
-    return true;
+    validateDealsArray(deals);
+    validateDealsContent(deals);
 };
 
-const validateDealAttributes = (deals) => {
-    deals.forEach(deal => {
-        if (!isDealValid(deal)) {
-            throw new Error("Each deal must have a non-null storeID and price.");
-        }
-        if (!isNumerical(deal.price)) {
-            throw new Error(`Price must be a numerical value. Invalid value: ${deal.price}`);
-        }
+const validateDealsArray = (deals) => {
+    if (!Array.isArray(deals)) {
+        throw new Error("Deals must be an array");
+    }
+    if (deals.length === 0) {
+        throw new Error("Deals array cannot be empty");
+    }
+};
+
+const validateDealsContent = (deals) => {
+    deals.forEach((deal, index) => {
+        validateDealStoreId(deal, index);
+        validatePrice(deal.price, index);
     });
 };
 
-const validateCheapestPrice = (cheapestPrice) => {
-    if (!isNumerical(cheapestPrice)) {
-        throw new Error(`CheapestPrice must be a numerical value. Invalid value: ${cheapestPrice}`);
+const validateDealStoreId = (deal, index) => {
+    if (!deal.storeID) {
+        throw new Error(`Deal at index ${index} is missing storeID`);
     }
 };
 
-const validateDeals = (deals) => {
-    if (!Array.isArray(deals) || deals.length === 0) {
-        throw new Error("Deals array cannot be empty.");
-    }
-
-    validateDealAttributes(deals);
-
-    if (!hasUniqueStoreIDs(deals)) {
-        throw new Error("Duplicate storeID found.");
-    }
-
-    return deals.map(deal => ({
-        storeID: deal.storeID,
-        price: deal.price
-    }));
+const validatePrice = (value, index) => {
+    validatePresence(value, index);
+    validateTypeAndFormat(value, index);
+    validateNonNegativity(value, index);
 };
 
-// Validate game attributes
-const validateGameAttributes = (game) => {
-    const requiredAttributes = ['title', 'cheapestPrice', 'deals'];
-    const invalidAttributes = requiredAttributes.filter(attr => isAttributeInvalid(game, attr));
+const validatePresence = (value, index) => {
+    if (value === undefined || value === null) {
+        if (index == 'cheapestPrice'){
+            throw new Error('Cheapest price is required.');
+        }
+        throw new Error(`Price is required at index ${index}`);
+    }
+};
+
+const validateTypeAndFormat = (value, index) => {
     
-    validateCheapestPrice(game.cheapestPrice);
-
-    if (invalidAttributes.length > 0) {
-        throw new Error(`Missing or empty required attributes: ${invalidAttributes.join(', ')}`);
+    const num = parseFloat(value);
+    if (!Number.isFinite(num) || isNaN(num)) {
+        if (index == 'cheapestPrice'){
+            throw new Error('Cheapest price must be a valid amount.');
+        }
+        throw new Error(`Price must be a valid amount at index ${index} (e.g., 12.50)`);
     }
+
+    return num.toFixed(2);
 };
 
-const isAttributeInvalid = (game, attr) => {
-    // Custom validation logic for each attribute
-    switch (attr) {
-        case 'title':
-        case 'cheapestPrice':
-        case 'deals':
-            return !game[attr] || game[attr] === null || game[attr] === '';
-        default:
-            return false;
+const validateNonNegativity = (value, index) => {
+    if (value < 0) {
+        if (index == 'cheapestPrice'){
+            throw new Error('Cheapest price cannot be negative.');
+        }
+        throw new Error(`Price at index ${index} cannot be negative`);
     }
 };
 
@@ -121,7 +112,7 @@ const fetchAndStoreGame = async (req, res) => {
             gameID: gameData.info.gameID,
             title: gameData.info.title,
             thumb: gameData.info.thumb,
-            cheapestPrice: gameData.cheapestPriceEver.price,
+            cheapestPrice: gameData.info.cheapestPrice,
             deals: gameData.deals
                 .filter(deal => deal.storeID != null && deal.price != null)
                 .map(deal => ({
@@ -159,46 +150,86 @@ const fetchAndStoreGame = async (req, res) => {
 const addGame = async (req, res) => {
     const collection = await connectDB();
     try {
-        const { title, thumb, cheapestPrice, deals } = req.body;
+        const { title, gameID, thumb, cheapestPrice, deals } = req.body;
 
-        // Validate game data
-        validateGameData({ title, thumb, cheapestPrice, deals });
+        try {
+            validateGameData({ title, cheapestPrice, deals, thumb, gameID });
+        } catch (validationError) {
+            return res.status(400).json({ 
+                error: "Validation failed", 
+                message: validationError.message 
+            });
+        }
 
-        // Check if the game already exists by title
-        const existingGame = await collection.findOne({ title });
+        // Check if the game already exists by title or gameID
+        const existingGame = await collection.findOne({
+            $or: [
+                { title },
+                { gameID: { $ne: null, $eq: gameID } }
+            ]
+        });
+        
         if (existingGame) {
-            return res.status(409).json({ message: "Game already exists in the database." });
+            return res.status(409).json({ 
+                message: "Game already exists in the database." 
+            });
         }
 
         // Insert new game into the database
-        const newGame = { title, thumb, cheapestPrice, deals };
+        const newGame = { 
+            title, 
+            thumb: thumb || null, 
+            cheapestPrice, 
+            deals,
+            gameID: gameID || null,
+            createdAt: new Date()
+        };
+        
         const result = await collection.insertOne(newGame);
 
         console.log("Game successfully added:", result.insertedId);
-        res.status(201).json({ message: "Game added successfully!", id: result.insertedId });
+        res.status(201).json({ 
+            message: "Game added successfully!", 
+            id: result.insertedId 
+        });
     } catch (error) {
         console.error("Error adding game:", error);
-        res.status(500).json({ error: "Failed to add game" });
+        res.status(500).json({ 
+            error: "Failed to add game",
+            message: error.message 
+        });
     }
 };
 
-// Other CRUD operations...
-
 //---------------Update a Game (PUT)-----------------------------------
-const validateGameData = ({ title, thumb, cheapestPrice, deals }) => {
+const validateGameData = ({ title, cheapestPrice, deals, thumb, gameID }) => {
     validateTitle(title);
-    if (cheapestPrice) {
-        validateCheapestPrice(cheapestPrice);
-    }
-    if (deals) {
-        validateDeals(deals);
-    }
+    validateGameID(gameID);
+    validateThumb(thumb);
+    validatePrice(cheapestPrice, 'cheapestPrice');
+    validateDeals(deals);
 };
 
 const validateTitle = (title) => {
-    if (title && (title.trim() === '')) {
-        throw new Error("Game title cannot be blank.");
+    if (!isValidTitle(title)) {
+        throw new Error("Title is required and must be a non-empty string");
     }
+};
+
+const validateThumb = (thumb) => {
+    if (thumb && !isValidUrl(thumb)) {
+        throw new Error("Thumb must be a valid URL");
+    }
+};
+
+const validateGameID = (gameID) => {
+    if (gameID && typeof gameID !== 'string') {
+        throw new Error("GameID must be a string");
+    }
+};
+
+const isValidTitle = function(title) {
+    return title && typeof title === 'string' && title.trim().length > 0;
 };
 
 const updateGame = async (req, res) => {
@@ -207,29 +238,67 @@ const updateGame = async (req, res) => {
         const gameId = new ObjectId(req.params.id);
         const existingGame = await fetchExistingGame(collection, gameId);
         const update = createUpdateObject(req.body);
-        validateGameData(update);
 
-        if (Object.keys(update).length === 0) {
-            throw new Error("No changes detected. Provide at least one unique update.");
-        }
+        // Validate only the fields present in the update object
+        validatePartialGameData(update);
+
+        await checkForDuplicateGame(collection, gameId, update);
+        await checkForEmptyUpdate(update);
 
         const result = await updateGameInDB(collection, gameId, update);
 
-        if (result.modifiedCount === 0) {
-            throw new Error("Game not found or no changes made.");
-        }
-
-        const successMessage = `Game updated with ID: ${req.params.id}`;
-        console.log(successMessage);
-        res.json({ message: successMessage });
+        await handleUpdateResult(result, req, res);
     } catch (error) {
         console.error(`Error: ${error.message}`);
         res.status(400).json({ error: error.message });
     }
 };
 
+// New function to validate only the fields present in the update object
+const validatePartialGameData = (update) => {
+    if (update.title !== undefined) validateTitle(update.title);
+    if (update.cheapestPrice !== undefined) validatePrice(update.cheapestPrice, 'cheapestPrice');
+    if (update.deals !== undefined) validateDeals(update.deals);
+    if (update.thumb !== undefined) validateThumb(update.thumb);
+    if (update.gameID !== undefined) validateGameID(update.gameID);
+};
+
+const checkForDuplicateGame = async (collection, gameId, update) => {
+    const duplicateConditions = [];
+    if (update.title) {
+        duplicateConditions.push({ title: update.title, _id: { $ne: gameId } });
+    }
+    if (update.gameID !== undefined) { // Allow null gameID
+        duplicateConditions.push({ gameID: update.gameID, _id: { $ne: gameId } });
+    }
+
+    if (duplicateConditions.length > 0) {
+        const duplicateGame = await collection.findOne({ $or: duplicateConditions });
+        if (duplicateGame) {
+            throw new Error("Duplicate title or gameID found.");
+        }
+    }
+};
+
+const checkForEmptyUpdate = (update) => {
+    if (Object.keys(update).length === 0) {
+        throw new Error("No changes detected. Provide at least one unique update.");
+    }
+};
+
+const handleUpdateResult = async (result, req, res) => {
+    if (result.modifiedCount === 0) {
+        throw new Error("Game not found or no changes made.");
+    }
+
+    const successMessage = `Game updated with ID: ${req.params.id}`;
+    console.log(successMessage);
+    res.json({ message: successMessage });
+};
+
 const createUpdateObject = (body) => {
     const update = {};
+    if (body.gameID !== undefined) update.gameID = body.gameID; // Allow null
     if (body.title) update.title = body.title;
     if (body.thumb) update.thumb = body.thumb;
     if (body.cheapestPrice) update.cheapestPrice = body.cheapestPrice;
@@ -243,16 +312,6 @@ const fetchExistingGame = async (collection, gameId) => {
         throw new Error("Game not found.");
     }
     return existingGame;
-};
-
-const isSameGame = (existingGame, newGameData) => {
-    return (
-        existingGame.gameID === newGameData.gameID &&
-        existingGame.title === newGameData.title &&
-        existingGame.thumb === newGameData.thumb &&
-        existingGame.cheapestPrice === newGameData.cheapestPrice &&
-        JSON.stringify(existingGame.deals) === JSON.stringify(newGameData.deals)
-    );
 };
 
 const updateGameInDB = async (collection, gameId, newGameData) => {
