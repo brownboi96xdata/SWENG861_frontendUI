@@ -8,11 +8,18 @@
 # testing
 /coverage
 
+# SSL/TLS keys and certificates
+/ssl
+*.pem
+*.crt
+*.key
+
 # production
 /build
 
-# misc
+# Ignore environment config files
 .DS_Store
+.env
 .env.local
 .env.development.local
 .env.test.local

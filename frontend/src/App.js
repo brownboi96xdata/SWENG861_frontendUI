@@ -1,50 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import GameList from './GameList';
+import AddGame from './AddGame';
+import FetchGame from './FetchGame';
+import DeleteGame from './DeleteGame';
 
-// Use the environment variable for the API URL
-const API_URL = process.env.REACT_APP_API_URL;
+const Home = () => (
+  <div>
+    <h1>Game Management</h1>
+    <nav>
+      <ul>
+        <li><Link to="/games">View Games</Link></li>
+        <li><Link to="/add-game">Add Game</Link></li>
+        <li><Link to="/fetch-game">Fetch & Store Game</Link></li>
+        <li><Link to="/delete-game">Delete Game</Link></li>
+      </ul>
+    </nav>
+  </div>
+);
 
-function App() {
-    const [games, setGames] = useState([]);
-    const [gameId, setGameId] = useState('');
-
-    useEffect(() => {
-        fetchGames();
-    }, []);
-
-    const fetchGames = async () => {
-        try {
-            const response = await axios.get(API_URL);
-            setGames(response.data);
-        } catch (error) {
-            console.error("Error fetching games:", error);
-        }
-    };
-
-    const deleteGame = async (id) => {
-        try {
-            // Assuming deletion is not supported by the API
-            // You can remove this function or handle it differently based on your needs
-            console.log(`Deleting game with ID: ${id} - Not implemented since API doesn't support it.`);
-        } catch (error) {
-            console.error("Error deleting game:", error);
-        }
-    };
-
-    return (
-        <div>
-            <h1>Game Deals Application</h1>
-            <h2>Game List</h2>
-            <ul>
-                {games.map(game => (
-                    <li key={game.id}>
-                        {game.title} - ${game.cheapestPrice}
-                        <button onClick={() => deleteGame(game.id)}>Delete (not supported)</button>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
-}
+const App = () => (
+  <Router>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/games" element={<GameList />} />
+      <Route path="/add-game" element={<AddGame />} />
+      <Route path="/fetch-game" element={<FetchGame />} />
+      <Route path="/delete-game" element={<DeleteGame />} />
+    </Routes>
+  </Router>
+);
 
 export default App;
