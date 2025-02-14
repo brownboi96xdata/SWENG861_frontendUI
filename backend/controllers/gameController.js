@@ -1,4 +1,5 @@
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient } = require('mongodb');
+const { ObjectId } = require('bson');
 const axios = require('axios');
 require('dotenv').config();
 
@@ -112,7 +113,7 @@ const fetchAndStoreGame = async (req, res) => {
             gameID: gameData.info.gameID,
             title: gameData.info.title,
             thumb: gameData.info.thumb,
-            cheapestPrice: gameData.info.cheapestPrice,
+            cheapestPrice: gameData.cheapestPriceEver ? parseFloat(gameData.cheapestPriceEver.price) : null,
             deals: gameData.deals
                 .filter(deal => deal.storeID != null && deal.price != null)
                 .map(deal => ({
